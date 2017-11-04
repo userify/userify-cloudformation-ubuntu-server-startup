@@ -1,0 +1,241 @@
+#!/bin/bash
+#
+# Userify Startup
+# Auto restart with 3 seconds.
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 
+   exit 1
+fi
+
+# RECOMMENDED KERNEL SETTINGS
+# for Userify:
+/sbin/sysctl -w fs.file-max=1048576
+ulimit -n 1048576
+# recommended for local Redis:
+/sbin/sysctl vm.overcommit_memory=1
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+
+
+# set up virtualenv
+if [ -d /opt/userify-server/python/ ]; then
+    source /opt/userify-server/python/bin/activate
+    export PYTHONPATH=/opt/userify-server/python/lib/python2.7/site-packages/
+    export PYTHONHOME=/opt/userify-server/python/
+fi
+
+
+# generate first base config
+if [ ! -f /opt/userify-server/base_config.cfg ]; then
+    
+    source /etc/userify-defaults.cfg
+    CRYPTO_KEY="$(echo -n "$CRYPTOSEED"|sha256sum|cut -d ' ' -f1)"
+
+    cat <<BASE_CONFIG_EOF > /opt/userify-server/base_config.cfg
+{
+  "already_sent_crypto_key": true,
+  "crypto_key": "$CRYPTO_KEY",
+  "s3endpoint": "$S3_ENDPOINT",
+  "s3_region": "$S3_REGION",
+  "bucket_name": "$S3_BUCKET",
+  "sa_username": "$CLUSTER_ADMIN_USERNAME",
+  "sa_password": "$CLUSTER_ADMIN_PASSWORD",
+  "redis_host": "$REDIS_HOST",
+  "redis_port": "$REDIS_PORT"
+}
+BASE_CONFIG_EOF
+
+    # Remove the original 'seed' and admin password (although
+    # still available through instance metadata) :(
+    sed -i "s/CRYPTOSEED.*//" /etc/userify-defaults.cfg
+    sed -i "s/CLUSTER_ADMIN_PASSWORD.*//" /etc/userify-defaults.cfg
+
+    # Introduce a bit of jitter to not have ASG instances not
+    # try to write-before-read multiple configs simultaneously
+    # (although that won't matter much anyway on first startup)
+    sleep .$(( $RANDOM / 100 ))
+
+    ## CREATE INITIAL CONFIG:CONFIG (only if base_config is already not existing anyway)
+
+    echo aws s3 cp s3://$S3_BUCKET/config:config /tmp/
+    if [ ! $(aws s3 cp s3://$S3_BUCKET/config:config /tmp/) ]; then
+
+    # doesn't exist. create a new (unencrypted) config:
+    cat << CONFIG_EOF > config\:config.decr
+{
+  "config_version": "1.0",
+  "contact_comments": "",
+  "contact_company": "",
+  "contact_email": "",
+  "contact_name": "",
+  "debug": false,
+  "failed_attempt_max_per_second": 1,
+  "fully_configured": true,
+  "introduce_latency": 0,
+  "ldap_attr_mail": "mail",
+  "ldap_email": "",
+  "ldap_host": "",
+  "ldap_password": "",
+  "ldap_realm": "",
+  "ldap_search_filter": "(&(objectClass=user)(sAMAccountName=USERNAME))",
+  "ldap_username_template": "",
+  "license_code": "",
+  "loghost": "",
+  "mail_bgcolor_danger": "#D62A2A",
+  "mail_bgcolor_info": "#0084D6",
+  "mail_bgcolor_safe": "#00BC00",
+  "mail_bgcolor_warning": "#D68000",
+  "mail_from_addr": "",
+  "mail_notification_subject_word": "Userify",
+  "mail_password": "",
+  "mail_server": "",
+  "mail_ssl_disabled": false,
+  "mail_username": "",
+  "max_file_upload_size": 33554432,
+  "rate_limit_per_user_per_second": 10,
+  "redis_host": "$REDIS_HOST",
+  "redis_db": "0",
+  "redis_passwd": "",
+  "redis_port": "$REDIS_PORT",
+  "sa_password": "",
+  "self_signed": true,
+  "shim_configuration_server": "$ELB_NAME",
+  "shim_delay": 5,
+  "shim_installer_server": "$ELB_NAME",
+  "storage_layer_s3_CompanyStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_CompanyStorage_keyname": "company",
+  "storage_layer_s3_CompanyStorage_public": false,
+  "storage_layer_s3_CompanyStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_ConfigStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_ConfigStorage_keyname": "config",
+  "storage_layer_s3_ConfigStorage_public": false,
+  "storage_layer_s3_ConfigStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_DataStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_DataStorage_keyname": "data",
+  "storage_layer_s3_DataStorage_public": false,
+  "storage_layer_s3_DataStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_InvitationStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_InvitationStorage_keyname": "invitation",
+  "storage_layer_s3_InvitationStorage_public": false,
+  "storage_layer_s3_InvitationStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_PhotoStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_PhotoStorage_keyname": "photo",
+  "storage_layer_s3_PhotoStorage_public": false,
+  "storage_layer_s3_PhotoStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_UserStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_UserStorage_keyname": "user",
+  "storage_layer_s3_UserStorage_public": false,
+  "storage_layer_s3_UserStorage_s3endpoint": "$S3_ENDPOINT",
+  "storage_layer_s3_UsernameStorage_bucket_name": "$S3_BUCKET",
+  "storage_layer_s3_UsernameStorage_keyname": "username",
+  "storage_layer_s3_UsernameStorage_public": false,
+  "storage_layer_s3_UsernameStorage_s3endpoint": "$S3_ENDPOINT",
+  "tls_crt": "",
+  "tls_key": "",
+  "web_server_url": "https://$ELB_NAME"
+}
+CONFIG_EOF
+
+    # now encrypt it using ucrypt and the encrypted crypto key above:
+    ucrypt -i config\:config.decr -o config\:config
+
+    # .. and, upload it to the bucket.
+    aws s3 cp config\:config s3://$S3_BUCKET/config:config
+
+    # we're done. remove the old file.
+    rm config\:config.decr config\:config
+
+    # finished writing and uploading initial config:config
+    fi
+
+# finished writing base_config
+fi
+
+
+if [ ! -f /etc/init.d/userify-server ]; then
+
+    # create the userify-server init script
+cat << "EOF" >/etc/init.d/userify-server
+#!/bin/bash
+# /etc/rc.d/init.d/userify-server
+# Userify Server startup script
+# This script is designed for maximum compatibility across all distributions,
+# including those that are running systemd and sysv
+
+### BEGIN INIT INFO
+# Provides:          userify-server
+# Required-Start:    $network $syslog
+# Required-Stop:     $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start userify-server at boot time
+# Description:       Starts the Userify Server https://userify.com from /opt/userify-server.
+### END INIT INFO
+
+# chkconfig: 2345 20 80
+# description: Userify Server startup script
+
+case "$1" in
+    start)
+        # removed stop
+        echo -n "Starting Userify Server: "
+        /opt/userify-server/userify-start &
+        ;;
+    stop)
+        echo -n "Shutting down Userify Server: "
+        pkill userify-start
+        pkill userify-server
+        ;;
+    status)
+        pgrep userify-server
+        ;;
+    restart)
+        $0 stop; $0 start
+        ;;
+    reload)
+        $0 stop; $0 start
+        ;;
+    *)
+        echo "Usage: userify-server {start|stop|status|reload|restart}"
+        exit 1
+        ;;
+esac
+EOF
+    chmod +x /etc/init.d/userify-server
+    set +e
+    [ -f /usr/sbin/update-rc.d ] && sudo update-rc.d userify-server defaults
+    # $(command -v systemctl) && sudo systemctl enable userify-server
+    set -e
+fi
+
+# actually start (or restart) userify-server:
+(while true;
+do
+
+    chmod +x /opt/userify-server/userify-server
+
+    # reconfigure environment in case it was modified:
+    if [ -d /opt/userify-server/python/ ]; then
+        source /opt/userify-server/python/bin/activate
+        export PYTHONPATH=/opt/userify-server/python/lib/python2.7/site-packages/
+        export PYTHONHOME=/opt/userify-server/python/
+    fi
+
+    # userify automatically attempts to bind to 443 and 80
+    # (dropping permissions after startup)
+    # but will not produce an error unless it cannot bind
+    # HTTP to localhost:8120 or the port number specified here.
+
+    # For additional performance, use HA Proxy or nginx to:
+    #   proxy to localhost for /api/
+    #   static files to /opt/userify-server/web/
+
+    /opt/userify-server/userify-server \
+       2>&1 \
+        | logger -t userify-server
+        # >> /var/log/userify-server.log
+
+    sleep 3
+
+done) &
