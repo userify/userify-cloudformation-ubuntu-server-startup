@@ -9,6 +9,8 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+source /etc/userify-defaults.cfg
+
 # RECOMMENDED KERNEL SETTINGS
 # for Userify:
 /sbin/sysctl -w fs.file-max=1048576
@@ -29,7 +31,6 @@ fi
 # generate first base config
 if [ ! -f /opt/userify-server/base_config.cfg ]; then
     
-    source /etc/userify-defaults.cfg
     CRYPTO_KEY="$(echo -n "$CRYPTOSEED"|sha256sum|cut -d ' ' -f1)"
 
     cat <<BASE_CONFIG_EOF > /opt/userify-server/base_config.cfg
