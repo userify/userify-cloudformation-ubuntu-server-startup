@@ -32,7 +32,6 @@ fi
 if [ ! -f /opt/userify-server/base_config.cfg ]; then
     
     CRYPTO_KEY="$(echo -n "$CRYPTOSEED"|sha256sum|cut -d ' ' -f1)"
-
     cat <<BASE_CONFIG_EOF > /opt/userify-server/base_config.cfg
 {
   "already_sent_crypto_key": true,
@@ -47,6 +46,8 @@ if [ ! -f /opt/userify-server/base_config.cfg ]; then
 }
 BASE_CONFIG_EOF
 
+    set -e
+
     # Remove the original 'seed' and admin password (although
     # still available through instance metadata) :(
     sed -i "s/CRYPTOSEED.*//" /etc/userify-defaults.cfg
@@ -60,10 +61,11 @@ BASE_CONFIG_EOF
     ## CREATE INITIAL CONFIG:CONFIG (only if base_config is already not existing anyway)
 
     echo aws s3 cp s3://$S3_BUCKET/config:config /tmp/
-    if [ ! $(aws s3 cp s3://$S3_BUCKET/config:config /tmp/) ]; then
+    exists="$(aws s3 cp s3://$S3_BUCKET/config:config /tmp/||echo no && echo exist)"
+    if [[ "$exists" == "no" ]]; then
 
-    # doesn't exist. create a new (unencrypted) config:
-    cat << CONFIG_EOF > config\:config.decr
+        # doesn't exist. create a new (unencrypted) config:
+        cat << CONFIG_EOF > config\:config.decr
 {
   "config_version": "1.0",
   "contact_comments": "",
@@ -138,16 +140,17 @@ BASE_CONFIG_EOF
 }
 CONFIG_EOF
 
-    # now encrypt it using ucrypt and the encrypted crypto key above:
-    ucrypt -i config\:config.decr -o config\:config
+        # now encrypt it using ucrypt and the encrypted crypto key above:
+        ucrypt -i config\:config.decr -o config\:config
 
-    # .. and, upload it to the bucket.
-    aws s3 cp config\:config s3://$S3_BUCKET/config:config
+        # .. and, upload it to the bucket.
+        aws s3 cp config\:config s3://$S3_BUCKET/config:config
 
-    # we're done. remove the old file.
-    rm config\:config.decr config\:config
+        # we're done. remove the old file.
+        rm config\:config.decr config\:config
 
-    # finished writing and uploading initial config:config
+        # finished writing and uploading initial config:config
+
     fi
 
 # finished writing base_config
