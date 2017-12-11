@@ -53,6 +53,8 @@ BASE_CONFIG_EOF
     sed -i "s/CRYPTOSEED.*//" /etc/userify-defaults.cfg
     sed -i "s/CLUSTER_ADMIN_PASSWORD.*//" /etc/userify-defaults.cfg
 
+    set +e
+
     # Introduce a bit of jitter to not have ASG instances not
     # try to write-before-read multiple configs simultaneously
     # (although that won't matter much anyway on first startup)
@@ -60,9 +62,10 @@ BASE_CONFIG_EOF
 
     ## CREATE INITIAL CONFIG:CONFIG (only if base_config is already not existing anyway)
 
-    echo aws s3 cp s3://$S3_BUCKET/config:config /tmp/
-    exists="$(aws s3 cp s3://$S3_BUCKET/config:config /tmp/||echo no && echo exist)"
-    if [[ "$exists" == "no" ]]; then
+    if aws s3 ls s3://$S3_BUCKET/config:config; then
+
+        # do not overwrite existing config if error occurs:
+        set -e
 
         # doesn't exist. create a new (unencrypted) config:
         cat << CONFIG_EOF > config\:config.decr
