@@ -130,7 +130,7 @@ BASE_CONFIG_EOF
   "redis_db": "$REDIS_DB",
   "redis_passwd": "$REDIS_PASSWD",
   "redis_port": "$REDIS_PORT",
-  "sa_password": "$SA_PASSWORD",
+  "sa_password": "$CLUSTER_ADMIN_PASSWORD",
   "self_signed": "$SELF_SIGNED",
   "shim_configuration_server": "$ELB_NAME",
   "shim_delay": "$SHIM_DELAY",
