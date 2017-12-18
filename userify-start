@@ -11,6 +11,30 @@ fi
 
 source /etc/userify-defaults.cfg
 
+# set defaults if not specified in configuration file:
+if [ "x$LDAP_SEARCH_FILTER" == "x" ]; then
+  # Active Directory:
+  LDAP_SEARCH_FILTER="(&(objectCategory=person)(objectClass=user)(sAMAccountName=USERNAME))"
+fi
+if [ "x$LDAP_ATTR_MAIL" == "x" ]; then
+  LDAP_ATTR_MAIL="mail"
+fi
+if [ "x$SHIM_DELAY" == "x" ]; then
+  SHIM_DELAY="5"
+fi
+if [ "x$SELF_SIGNED" == "x" ]; then
+  SELF_SIGNED="true"
+fi
+if [ "x$REDIS_DB" == "x" ]; then
+  REDIS_DB="0"
+fi
+if [ "x$MAIL_SSL_DISABLED" == "x" ]; then
+  MAIL_SSL_DISABLED="false"
+fi
+if [ "x$MAIL_SUBJECT_WORD" == "x" ]; then
+  MAIL_SUBJECT_WORD="Userify Enterprise"
+fi
+
 # RECOMMENDED KERNEL SETTINGS
 # for Userify:
 /sbin/sysctl -w fs.file-max=1048576
@@ -42,6 +66,8 @@ if [ ! -f /opt/userify-server/base_config.cfg ]; then
   "sa_username": "$CLUSTER_ADMIN_USERNAME",
   "sa_password": "$CLUSTER_ADMIN_PASSWORD",
   "redis_host": "$REDIS_HOST",
+  "redis_db": "$REDIS_DB",
+  "redis_passwd": "$REDIS_PASSWD",
   "redis_port": "$REDIS_PORT"
 }
 BASE_CONFIG_EOF
@@ -71,43 +97,43 @@ BASE_CONFIG_EOF
         cat << CONFIG_EOF > config\:config.decr
 {
   "config_version": "1.0",
-  "contact_comments": "",
-  "contact_company": "",
-  "contact_email": "",
-  "contact_name": "",
+  "contact_comments": "$CONTACT_COMMENTS",
+  "contact_company": "$CONTACT_COMPANY",
+  "contact_email": "$CONTACT_EMAIL",
+  "contact_name": "$CONTACT_NAME",
   "debug": false,
   "failed_attempt_max_per_second": 1,
   "fully_configured": true,
   "introduce_latency": 0,
-  "ldap_attr_mail": "mail",
-  "ldap_email": "",
-  "ldap_host": "",
-  "ldap_password": "",
-  "ldap_realm": "",
-  "ldap_search_filter": "(&(objectClass=user)(sAMAccountName=USERNAME))",
-  "ldap_username_template": "",
-  "license_code": "",
-  "loghost": "",
+  "ldap_attr_mail": "$LDAP_ATTR_MAIL",
+  "ldap_email": "$LDAP_EMAIL",
+  "ldap_host": "$LDAP_HOST",
+  "ldap_password": "$LDAP_PASSWORD",
+  "ldap_realm": "$LDAP_REALM",
+  "ldap_search_filter": "$LDAP_SEARCH_FILTER",
+  "ldap_username_template": "$LDAP_USERNAME_TEMPLATE",
+  "license_code": "$LICENSE_CODE",
+  "loghost": "$LOGHOST",
   "mail_bgcolor_danger": "#D62A2A",
   "mail_bgcolor_info": "#0084D6",
   "mail_bgcolor_safe": "#00BC00",
   "mail_bgcolor_warning": "#D68000",
-  "mail_from_addr": "",
-  "mail_notification_subject_word": "Userify",
-  "mail_password": "",
-  "mail_server": "",
-  "mail_ssl_disabled": false,
-  "mail_username": "",
+  "mail_from_addr": "$MAIL_FROM_ADDR",
+  "mail_notification_subject_word": "$MAIL_SUBJECT_WORD",
+  "mail_password": "$MAIL_PASSWORD",
+  "mail_server": "$MAIL_SERVER",
+  "mail_ssl_disabled": "$MAIL_SSL_DISABLED",
+  "mail_username": "$MAIL_USERNAME",
   "max_file_upload_size": 33554432,
   "rate_limit_per_user_per_second": 10,
   "redis_host": "$REDIS_HOST",
-  "redis_db": "0",
-  "redis_passwd": "",
+  "redis_db": "$REDIS_DB",
+  "redis_passwd": "$REDIS_PASSWD",
   "redis_port": "$REDIS_PORT",
-  "sa_password": "",
-  "self_signed": true,
+  "sa_password": "$SA_PASSWORD",
+  "self_signed": "$SELF_SIGNED",
   "shim_configuration_server": "$ELB_NAME",
-  "shim_delay": 5,
+  "shim_delay": "$SHIM_DELAY",
   "shim_installer_server": "$ELB_NAME",
   "storage_layer_s3_CompanyStorage_bucket_name": "$S3_BUCKET",
   "storage_layer_s3_CompanyStorage_keyname": "company",
@@ -137,8 +163,8 @@ BASE_CONFIG_EOF
   "storage_layer_s3_UsernameStorage_keyname": "username",
   "storage_layer_s3_UsernameStorage_public": false,
   "storage_layer_s3_UsernameStorage_s3endpoint": "$S3_ENDPOINT",
-  "tls_crt": "",
-  "tls_key": "",
+  "tls_crt": "$TLS_CRT",
+  "tls_key": "$TLS_KEY",
   "web_server_url": "https://$ELB_NAME"
 }
 CONFIG_EOF
