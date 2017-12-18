@@ -72,14 +72,12 @@ if [ ! -f /opt/userify-server/base_config.cfg ]; then
 }
 BASE_CONFIG_EOF
 
-    set -e
+    set +e
 
     # Remove the original 'seed' and admin password (although
     # still available through instance metadata) :(
     sed -i "s/CRYPTOSEED.*//" /etc/userify-defaults.cfg
     sed -i "s/CLUSTER_ADMIN_PASSWORD.*//" /etc/userify-defaults.cfg
-
-    set +e
 
     # Introduce a bit of jitter to not have ASG instances not
     # try to write-before-read multiple configs simultaneously
@@ -130,6 +128,7 @@ BASE_CONFIG_EOF
   "redis_db": "$REDIS_DB",
   "redis_passwd": "$REDIS_PASSWD",
   "redis_port": "$REDIS_PORT",
+  "sa_username": "$CLUSTER_ADMIN_USERNAME",
   "sa_password": "$CLUSTER_ADMIN_PASSWORD",
   "self_signed": "$SELF_SIGNED",
   "shim_configuration_server": "$ELB_NAME",
