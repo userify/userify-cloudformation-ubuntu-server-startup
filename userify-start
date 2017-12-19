@@ -213,8 +213,8 @@ do
 
     /opt/userify-server/userify-server \
        2>&1 \
+        | tee /var/log/userify-server.log \
         | logger -t userify-server
-        # >> /var/log/userify-server.log
 
     sleep 3
 
