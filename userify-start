@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 #
 # Userify Startup
 # Auto restart with 3 seconds.
@@ -48,14 +48,12 @@ ulimit -n 1048576
 /sbin/sysctl vm.overcommit_memory=1
 echo never > /sys/kernel/mm/transparent_hugepage/enabled
 
-
 # set up virtualenv
 if [ -d /opt/userify-server/python/ ]; then
     source /opt/userify-server/python/bin/activate
     export PYTHONPATH=/opt/userify-server/python/lib/python2.7/site-packages/
     export PYTHONHOME=/opt/userify-server/python/
 fi
-
 
 # generate first base config
 if [ ! -f /opt/userify-server/base_config.cfg ]; then
@@ -91,7 +89,7 @@ BASE_CONFIG_EOF
 
     ## CREATE INITIAL CONFIG:CONFIG (only if base_config is already not existing anyway)
 
-    if aws s3 ls s3://$S3_BUCKET/config:config; then
+    if ! aws s3 ls s3://$S3_BUCKET/config:config; then
 
         # do not overwrite existing config if error occurs:
         set -e
@@ -175,6 +173,8 @@ CONFIG_EOF
 
         # now encrypt it using ucrypt and the encrypted crypto key above:
         ucrypt -i config\:config.decr -o config\:config
+
+        set +e
 
         # .. and, upload it to the bucket.
         aws s3 cp config\:config s3://$S3_BUCKET/config:config
