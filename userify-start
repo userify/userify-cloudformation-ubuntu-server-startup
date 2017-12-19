@@ -9,6 +9,8 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+cd /opt/userify-server
+
 source /etc/userify-defaults.cfg
 
 # set defaults if not specified in configuration file:
@@ -34,6 +36,9 @@ fi
 if [ "x$MAIL_SUBJECT_WORD" == "x" ]; then
   MAIL_SUBJECT_WORD="Userify Enterprise"
 fi
+
+# Escape backslash for CORP\USERNAME to prevent converting to '\U'
+LDAP_USERNAME_TEMPLATE="$(echo "$LDAP_USERNAME_TEMPLATE" | sed 's/\\/\\\\/g')"
 
 # RECOMMENDED KERNEL SETTINGS
 # for Userify:
